@@ -1,14 +1,16 @@
 name: Daily leofame free trial claim
 
+# Auto-schedule disabled: daily-full-traverse.yml now covers likes/views/saves/shares
+# for every known post each day, making this single round-robin claim redundant.
+# Left as workflow_dispatch only, e.g. for a one-off CLAIM_TYPE=followers run.
 on:
-  schedule:
-    # Runs once every 24h — matches leofame's own free trial reset window.
-    - cron: '0 6 * * *'
   workflow_dispatch: {}
 
 jobs:
   claim:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +24,13 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Sync recent Instagram posts (top few only, not all 142, no login)
+        continue-on-error: true
+        env:
+          TARGET_IG_ACCOUNT: ${{ vars.TARGET_IG_ACCOUNT }}
+          HEADLESS: 'true'
+        run: node scripts/sync-recent-posts.js
+
       - name: Claim free trial
         env:
           CLAIM_TYPE: ${{ vars.CLAIM_TYPE }}
@@ -29,6 +38,14 @@ jobs:
           INSTAGRAM_POST_URL: ${{ secrets.INSTAGRAM_POST_URL }}
           HEADLESS: 'true'
         run: node claim.js
+
+      - name: Commit updated post list/rotation state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/posts.json data/rotation-state.json
+          git diff --cached --quiet || git commit -m "chore: sync instagram posts list [skip ci]"
+          git push
 
       - name: Upload screenshots
         if: always()

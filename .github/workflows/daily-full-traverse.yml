@@ -1,0 +1,88 @@
+name: Daily full post boost (all posts x likes/views/saves/shares)
+
+# Every day: sync a handful of recent Instagram posts into data/posts.json, then
+# traverse EVERY known post through all 4 leofame free-trial pages, waiting 90s per
+# submission. The full list is sharded across parallel matrix jobs so the whole run
+# finishes within a single job's 6-hour limit even as the post list keeps growing —
+# bump NUM_SHARDS (and the matrix list below) if it ever gets close to that ceiling.
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 00:00 UTC daily
+  workflow_dispatch: {}
+
+env:
+  NUM_SHARDS: 8
+
+jobs:
+  sync-posts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Sync recent Instagram posts (anonymous, top few only)
+        continue-on-error: true
+        env:
+          TARGET_IG_ACCOUNT: ${{ vars.TARGET_IG_ACCOUNT }}
+          HEADLESS: 'true'
+        run: node scripts/sync-recent-posts.js
+
+      - name: Commit updated post list
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/posts.json
+          git diff --cached --quiet || git commit -m "chore: sync instagram posts list [skip ci]"
+          git push
+
+  traverse:
+    needs: sync-posts
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Traverse shard through all 4 leofame pages
+        env:
+          SHARD_INDEX: ${{ matrix.shard }}
+          TOTAL_SHARDS: ${{ env.NUM_SHARDS }}
+          CLAIM_WAIT_MS: '90000'
+          HEADLESS: 'true'
+        run: node scripts/traverse-claim.js
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-shard-${{ matrix.shard }}
+          path: screenshots/
+          retention-days: 3

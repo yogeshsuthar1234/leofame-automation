@@ -5,7 +5,11 @@
   "main": "claim.js",
   "scripts": {
     "start": "node claim.js",
-    "claim": "node claim.js"
+    "claim": "node claim.js",
+    "login:ig": "node scripts/instagram-login.js",
+    "fetch:posts": "node scripts/fetch-all-posts.js",
+    "sync:posts": "node scripts/sync-recent-posts.js",
+    "traverse": "node scripts/traverse-claim.js"
   },
   "keywords": [],
   "author": "",

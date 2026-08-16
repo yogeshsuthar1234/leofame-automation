@@ -5,6 +5,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { getNextPostUrl } = require('./lib/postRotation');
 
 const CONFIG = {
   CLAIM_TYPE: (process.env.CLAIM_TYPE || 'likes').toLowerCase(), // followers | likes | views
@@ -43,12 +44,15 @@ async function claim() {
     throw new Error(`Unknown CLAIM_TYPE "${claimType}". Use one of: followers, likes, views`);
   }
 
-  const linkValue = claimType === 'followers' ? CONFIG.INSTAGRAM_USERNAME : CONFIG.INSTAGRAM_POST_URL;
+  // For likes/views, an explicit INSTAGRAM_POST_URL always wins; otherwise fall back to
+  // the next post in data/posts.json (round-robin), kept fresh by scripts/sync-recent-posts.js.
+  const linkValue =
+    claimType === 'followers' ? CONFIG.INSTAGRAM_USERNAME : CONFIG.INSTAGRAM_POST_URL || getNextPostUrl();
   if (!linkValue) {
     throw new Error(
       claimType === 'followers'
         ? 'INSTAGRAM_USERNAME is required for CLAIM_TYPE=followers'
-        : 'INSTAGRAM_POST_URL is required for CLAIM_TYPE=likes/views'
+        : 'INSTAGRAM_POST_URL is not set and data/posts.json has no posts yet for CLAIM_TYPE=likes/views'
     );
   }
 
