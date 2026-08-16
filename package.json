@@ -1,0 +1,16 @@
+{
+  "name": "leofame-daily-claim",
+  "version": "1.0.0",
+  "description": "Automates claiming your own daily free trial (followers/likes/views) on leofame.com",
+  "main": "claim.js",
+  "scripts": {
+    "start": "node claim.js",
+    "claim": "node claim.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "playwright": "^1.55.1"
+  }
+}

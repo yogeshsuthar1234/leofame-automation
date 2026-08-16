@@ -1,0 +1,39 @@
+name: Daily leofame free trial claim
+
+on:
+  schedule:
+    # Runs once every 24h — matches leofame's own free trial reset window.
+    - cron: '0 6 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  claim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Claim free trial
+        env:
+          CLAIM_TYPE: ${{ vars.CLAIM_TYPE }}
+          INSTAGRAM_USERNAME: ${{ secrets.INSTAGRAM_USERNAME }}
+          INSTAGRAM_POST_URL: ${{ secrets.INSTAGRAM_POST_URL }}
+          HEADLESS: 'true'
+        run: node claim.js
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/
+          retention-days: 3
