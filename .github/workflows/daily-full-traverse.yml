@@ -1,14 +1,15 @@
 name: Daily full post boost (all posts x likes/views/saves/shares)
 
-# Every day: sync a handful of recent Instagram posts into data/posts.json, then
+# Twice a day: sync a handful of recent Instagram posts into data/posts.json, then
 # traverse EVERY known post through all 4 leofame free-trial pages, waiting 90s per
 # submission. The full list is sharded across parallel matrix jobs so the whole run
-# finishes within a single job's 6-hour limit even as the post list keeps growing —
-# bump NUM_SHARDS (and the matrix list below) if it ever gets close to that ceiling.
+# finishes within the traverse job's 300-minute timeout even as the post list keeps
+# growing — bump NUM_SHARDS (and the matrix list below), or raise timeout-minutes,
+# if a shard ever gets close to that ceiling.
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 00:00 UTC daily
+    - cron: '0 0,12 * * *' # 00:00 and 12:00 UTC daily
   workflow_dispatch: {}
 
 env:
@@ -17,6 +18,7 @@ env:
 jobs:
   sync-posts:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
@@ -32,7 +34,20 @@ jobs:
         run: npm install
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # apt-get (pulled in by --with-deps) occasionally hangs on the runner's
+        # package mirror instead of failing outright, which used to stall the whole
+        # job until GitHub's 6h ceiling force-cancelled it. Cap each attempt and retry
+        # a couple of times so a mirror hiccup costs minutes, not hours.
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 480 npx playwright install --with-deps chromium; then
+              exit 0
+            fi
+            echo "Playwright install attempt $attempt failed or timed out, retrying..."
+            sleep 10
+          done
+          echo "Playwright install failed after 3 attempts" >&2
+          exit 1
 
       - name: Sync recent Instagram posts (anonymous, top few only)
         continue-on-error: true
@@ -52,6 +67,7 @@ jobs:
   traverse:
     needs: sync-posts
     runs-on: ubuntu-latest
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
@@ -69,7 +85,20 @@ jobs:
         run: npm install
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # apt-get (pulled in by --with-deps) occasionally hangs on the runner's
+        # package mirror instead of failing outright, which used to stall the whole
+        # job until GitHub's 6h ceiling force-cancelled it. Cap each attempt and retry
+        # a couple of times so a mirror hiccup costs minutes, not hours.
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 480 npx playwright install --with-deps chromium; then
+              exit 0
+            fi
+            echo "Playwright install attempt $attempt failed or timed out, retrying..."
+            sleep 10
+          done
+          echo "Playwright install failed after 3 attempts" >&2
+          exit 1
 
       - name: Traverse shard through all 4 leofame pages
         env:
