@@ -18,6 +18,21 @@ function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
+// Instagram often shows a dismissible "Sign up to see more" modal over the profile
+// instead of a hard login redirect — the posts grid underneath is still visible
+// anonymously once the modal's Close (X) button is clicked.
+async function dismissSignupModal(page) {
+  const closeButton = page.locator('svg[aria-label="Close"]').first();
+  try {
+    await closeButton.waitFor({ state: 'visible', timeout: 4000 });
+  } catch {
+    return false;
+  }
+  await closeButton.click();
+  await page.waitForTimeout(500);
+  return true;
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: HEADLESS });
   const context = await browser.newContext({
@@ -34,6 +49,16 @@ async function main() {
 
     if (page.url().includes('/accounts/login') || page.url().includes('/challenge')) {
       log('Instagram is asking for a login to view this profile right now. Skipping sync (posts list unchanged).');
+      return;
+    }
+
+    const dismissed = await dismissSignupModal(page);
+    if (dismissed) {
+      log('Dismissed the "sign up to see more" modal.');
+    }
+
+    if (page.url().includes('/accounts/login') || page.url().includes('/challenge')) {
+      log('Instagram redirected to a hard login wall. Skipping sync (posts list unchanged).');
       return;
     }
 
