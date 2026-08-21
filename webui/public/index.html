@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Instagram Post List</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --border: #e3e5e9;
+    --text: #1c1e21;
+    --muted: #6b7280;
+    --accent: #6d28d9;
+    --accent-hover: #5b21b6;
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+    --error-bg: #fef2f2;
+    --error-text: #991b1b;
+    --success-bg: #f0fdf4;
+    --success-text: #166534;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+  h1 {
+    font-size: 1.5rem;
+    margin: 0 0 4px;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0 0 28px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .add-row {
+    display: flex;
+    gap: 10px;
+  }
+  input[type="text"] {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+  }
+  input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: white;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  .message {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    display: none;
+  }
+  .message.error { display: block; background: var(--error-bg); color: var(--error-text); }
+  .message.success { display: block; background: var(--success-bg); color: var(--success-text); }
+  .list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+  .list-header h2 { font-size: 1rem; margin: 0; }
+  .list-header .meta { color: var(--muted); font-size: 0.82rem; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  li:last-child { border-bottom: none; }
+  li a {
+    color: var(--text);
+    text-decoration: none;
+    font-size: 0.9rem;
+    word-break: break-all;
+  }
+  li a:hover { color: var(--accent); text-decoration: underline; }
+  .remove-btn {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  .remove-btn:hover { background: var(--danger); color: white; }
+  .empty {
+    color: var(--muted);
+    font-size: 0.9rem;
+    padding: 12px 0;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Instagram Post List</h1>
+    <p class="subtitle">Add post/reel URLs manually — no scraping needed.</p>
+
+    <div class="card">
+      <div class="add-row">
+        <input type="text" id="urlInput" placeholder="https://www.instagram.com/p/..." />
+        <button id="addBtn">Add</button>
+      </div>
+      <div class="message" id="message"></div>
+    </div>
+
+    <div class="card">
+      <div class="list-header">
+        <h2 id="accountName">Posts</h2>
+        <span class="meta" id="metaInfo"></span>
+      </div>
+      <ul id="postList"></ul>
+      <div class="empty" id="emptyState" style="display:none;">No posts yet — add one above.</div>
+    </div>
+  </div>
+
+  <script>
+    const urlInput = document.getElementById('urlInput');
+    const addBtn = document.getElementById('addBtn');
+    const messageEl = document.getElementById('message');
+    const postList = document.getElementById('postList');
+    const emptyState = document.getElementById('emptyState');
+    const accountName = document.getElementById('accountName');
+    const metaInfo = document.getElementById('metaInfo');
+
+    function showMessage(text, type) {
+      messageEl.textContent = text;
+      messageEl.className = 'message ' + type;
+      setTimeout(() => { messageEl.className = 'message'; }, 4000);
+    }
+
+    function render(data) {
+      accountName.textContent = data.account ? '@' + data.account : 'Posts';
+      metaInfo.textContent = data.posts.length + ' post(s)' +
+        (data.updatedAt ? ' · updated ' + new Date(data.updatedAt).toLocaleString() : '');
+
+      postList.innerHTML = '';
+      emptyState.style.display = data.posts.length ? 'none' : 'block';
+
+      data.posts.slice().reverse().forEach((url) => {
+        const li = document.createElement('li');
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = url;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.textContent = 'Remove';
+        removeBtn.onclick = () => removePost(url);
+
+        li.appendChild(a);
+        li.appendChild(removeBtn);
+        postList.appendChild(li);
+      });
+    }
+
+    async function loadPosts() {
+      const res = await fetch('/api/posts');
+      const data = await res.json();
+      render(data);
+    }
+
+    async function addPost() {
+      const url = urlInput.value.trim();
+      if (!url) return;
+      addBtn.disabled = true;
+      try {
+        const res = await fetch('/api/posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showMessage(data.error || 'Could not add that post.', 'error');
+          return;
+        }
+        urlInput.value = '';
+        showMessage('Post added.', 'success');
+        render(data);
+      } catch (err) {
+        showMessage('Network error — is the server running?', 'error');
+      } finally {
+        addBtn.disabled = false;
+      }
+    }
+
+    async function removePost(url) {
+      try {
+        const res = await fetch('/api/posts', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showMessage(data.error || 'Could not remove that post.', 'error');
+          return;
+        }
+        showMessage('Post removed.', 'success');
+        render(data);
+      } catch (err) {
+        showMessage('Network error — is the server running?', 'error');
+      }
+    }
+
+    addBtn.addEventListener('click', addPost);
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addPost();
+    });
+
+    loadPosts();
+  </script>
+</body>
+</html>

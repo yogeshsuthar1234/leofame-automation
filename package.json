@@ -9,7 +9,8 @@
     "login:ig": "node scripts/instagram-login.js",
     "fetch:posts": "node scripts/fetch-all-posts.js",
     "sync:posts": "node scripts/sync-recent-posts.js",
-    "traverse": "node scripts/traverse-claim.js"
+    "traverse": "node scripts/traverse-claim.js",
+    "posts:ui": "node webui/server.js"
   },
   "keywords": [],
   "author": "",
