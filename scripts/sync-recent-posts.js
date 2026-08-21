@@ -13,9 +13,14 @@ const { loadPosts, savePosts, mergeNewPosts } = require('../lib/postRotation');
 const TARGET_ACCOUNT = process.env.TARGET_IG_ACCOUNT || 'dadaji_furniture_vadodara';
 const HEADLESS = process.env.HEADLESS !== 'false';
 const RECENT_COUNT = parseInt(process.env.RECENT_COUNT || '4', 10);
+const MAX_ATTEMPTS = parseInt(process.env.SYNC_ATTEMPTS || '3', 10);
 
 function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
+}
+
+function isLoginWall(page) {
+  return page.url().includes('/accounts/login') || page.url().includes('/challenge');
 }
 
 // Instagram often shows a dismissible "Sign up to see more" modal over the profile
@@ -33,11 +38,21 @@ async function dismissSignupModal(page) {
   return true;
 }
 
-async function main() {
-  const browser = await chromium.launch({ headless: HEADLESS });
+// Datacenter IPs (like GitHub Actions runners) get flagged for anonymous scraping much
+// more readily than a normal residential browser, which is when Instagram serves a hard
+// /accounts/login redirect instead of the dismissible modal. Each attempt gets a fresh
+// context with a more realistic browser fingerprint, since the wall isn't always shown.
+async function fetchRecentPostUrls(browser, attempt) {
   const context = await browser.newContext({
     userAgent:
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    viewport: { width: 1366, height: 768 },
+    locale: 'en-US',
+    timezoneId: 'Asia/Kolkata',
+    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+  });
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
   });
   const page = await context.newPage();
 
@@ -47,19 +62,19 @@ async function main() {
       timeout: 30000,
     });
 
-    if (page.url().includes('/accounts/login') || page.url().includes('/challenge')) {
-      log('Instagram is asking for a login to view this profile right now. Skipping sync (posts list unchanged).');
-      return;
+    if (isLoginWall(page)) {
+      log(`Attempt ${attempt}: Instagram redirected straight to a hard login wall.`);
+      return null;
     }
 
     const dismissed = await dismissSignupModal(page);
     if (dismissed) {
-      log('Dismissed the "sign up to see more" modal.');
+      log(`Attempt ${attempt}: dismissed the "sign up to see more" modal.`);
     }
 
-    if (page.url().includes('/accounts/login') || page.url().includes('/challenge')) {
-      log('Instagram redirected to a hard login wall. Skipping sync (posts list unchanged).');
-      return;
+    if (isLoginWall(page)) {
+      log(`Attempt ${attempt}: Instagram redirected to a hard login wall after the modal.`);
+      return null;
     }
 
     await page.waitForTimeout(3000);
@@ -68,9 +83,34 @@ async function main() {
       Array.from(new Set(as.map((a) => a.getAttribute('href')))).filter(Boolean)
     );
 
-    const recent = hrefs
+    return hrefs
       .map((href) => (href.startsWith('http') ? href : `https://www.instagram.com${href}`))
       .slice(0, RECENT_COUNT);
+  } finally {
+    await context.close();
+  }
+}
+
+async function main() {
+  const browser = await chromium.launch({
+    headless: HEADLESS,
+    args: ['--disable-blink-features=AutomationControlled'],
+  });
+
+  try {
+    let recent = null;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      recent = await fetchRecentPostUrls(browser, attempt);
+      if (recent) break;
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, 5000 * attempt));
+      }
+    }
+
+    if (!recent) {
+      log(`Instagram kept showing a hard login wall after ${MAX_ATTEMPTS} attempt(s). Skipping sync (posts list unchanged).`);
+      return;
+    }
 
     log(`Fetched ${recent.length} recent post URL(s) from ${TARGET_ACCOUNT}.`);
 
