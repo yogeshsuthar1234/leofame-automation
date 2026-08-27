@@ -9,7 +9,7 @@ name: Daily full post boost (all posts x likes/views/saves/shares)
 
 on:
   schedule:
-    - cron: '0 0,12 * * *' # 00:00 and 12:00 UTC daily
+    - cron: '17 0,12 * * *' # 00:00 and 12:00 UTC daily
   workflow_dispatch: {}
 
 env:
